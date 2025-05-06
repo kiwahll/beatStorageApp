@@ -4,15 +4,19 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use dialoguer::Select;
+use dotenv::dotenv;
 use serde_json::Value;
-use std::process::Command;
+use std::{path::PathBuf, process::Command};
 use std::{
     io::{self, stdout},
     process::exit,
 };
+#[macro_use]
+extern crate dotenv_codegen;
 
 #[tokio::main]
 async fn main() {
+    dotenv().ok();
     clear();
     let json: Value = fetch_data().await.unwrap();
 
@@ -28,21 +32,21 @@ async fn main() {
         for key in item.as_object().unwrap().keys() {
             println!("{}: {}", key, item.get(key).unwrap());
         }
+        pause();
 
-        // PAUSE
-        _ = io::stdin().read_line(&mut String::new());
-
+        let title: &str = item.get("title").unwrap().as_str().unwrap();
         let status = Command::new("yt-dlp")
             .args([
                 "-f",
                 "bestaudio",
                 "-o",
-                "output.%(ext)s",
+                title,
                 "--extract-audio",
                 "--audio-format",
                 "flac",
                 item.get("url").unwrap().as_str().unwrap(),
             ])
+            .current_dir(dotenv!("DOWNLOAD_PATH"))
             .status()
             .expect("failed to execute yt-dlp");
 
@@ -83,8 +87,7 @@ fn menu(json: &Value, index: usize) -> Result<usize, Box<dyn std::error::Error>>
 }
 
 async fn fetch_data() -> Result<Value, Box<dyn std::error::Error>> {
-    let url: &str = "http://127.0.0.1:8000";
-    let response = reqwest::get(url)
+    let response = reqwest::get(dotenv!("URL"))
         .await
         .unwrap_or_else(|e| {
             eprintln!("{}", e);
