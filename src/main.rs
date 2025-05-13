@@ -6,13 +6,22 @@ use crossterm::{
 use dialoguer::Select;
 use dotenv::dotenv;
 use serde_json::Value;
-use std::{path::PathBuf, process::Command};
+use strum::VariantNames;
 use std::{
     io::{self, stdout},
-    process::exit,
+    process::exit, usize,
 };
+use std::process::Command;
 #[macro_use]
 extern crate dotenv_codegen;
+use strum_macros::{EnumIter, VariantNames};
+
+#[derive(EnumIter, VariantNames, Debug)]
+enum BeatOption {
+    Back,
+    Open,
+    Download
+}
 
 #[tokio::main]
 async fn main() {
@@ -22,7 +31,7 @@ async fn main() {
 
     let mut index: usize = 0;
     loop {
-        index = menu(&json, index.clone()).unwrap_or_else(|e| {
+        index = beat_selection(&json, index.clone()).unwrap_or_else(|e| {
             eprintln!("{}", e);
             pause();
             exit(1);
@@ -32,27 +41,16 @@ async fn main() {
         for key in item.as_object().unwrap().keys() {
             println!("{}: {}", key, item.get(key).unwrap());
         }
-        pause();
-
-        let title: &str = item.get("title").unwrap().as_str().unwrap();
-        let status = Command::new("yt-dlp")
-            .args([
-                "-f",
-                "bestaudio",
-                "-o",
-                title,
-                "--extract-audio",
-                "--audio-format",
-                "flac",
-                item.get("url").unwrap().as_str().unwrap(),
-            ])
-            .current_dir(dotenv!("DOWNLOAD_PATH"))
-            .status()
-            .expect("failed to execute yt-dlp");
-
-        println!("Status: {}", status);
-
-        pause();
+        match beat_options() {
+            1 => {
+                _ = open::that(item.get("url").unwrap().as_str().unwrap());
+            },
+            2 => {
+                download(item);
+                println!("Done!");
+            },
+            _ => {}
+        }
         clear();
     }
 }
@@ -65,7 +63,26 @@ fn pause() {
     _ = io::stdin().read_line(&mut String::new());
 }
 
-fn menu(json: &Value, index: usize) -> Result<usize, Box<dyn std::error::Error>> {
+fn download(item: &Value) {
+    let status = Command::new("yt-dlp")
+        .args([
+            "-f",
+            "bestaudio",
+            "-o",
+            item.get("title").unwrap().as_str().unwrap(),
+            "--extract-audio",
+            "--audio-format",
+            "flac",
+            item.get("url").unwrap().as_str().unwrap(),
+        ])
+        .current_dir(dotenv!("DOWNLOAD_PATH"))
+        .status()
+        .expect("failed to execute yt-dlp");
+
+    println!("Status: {}", status);
+}
+
+fn beat_selection(json: &Value, index: usize) -> Result<usize, Box<dyn std::error::Error>> {
     let mut selection_items: Vec<&str> = Vec::new();
     if let Some(array) = json.as_array() {
         for item in array {
@@ -84,6 +101,10 @@ fn menu(json: &Value, index: usize) -> Result<usize, Box<dyn std::error::Error>>
         .unwrap();
 
     Ok(selection)
+}
+
+fn beat_options() -> usize {
+    Select::new().default(0).items(BeatOption::VARIANTS).interact().unwrap()
 }
 
 async fn fetch_data() -> Result<Value, Box<dyn std::error::Error>> {
