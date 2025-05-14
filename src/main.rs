@@ -4,16 +4,12 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use dialoguer::Select;
-use dotenv::dotenv;
 use serde_json::Value;
 use strum::VariantNames;
 use std::{
-    io::{self, stdout},
-    process::exit, usize,
+    env, io::{self, stdout}, process::exit, usize
 };
 use std::process::Command;
-#[macro_use]
-extern crate dotenv_codegen;
 use strum_macros::{EnumIter, VariantNames};
 
 #[derive(EnumIter, VariantNames, Debug)]
@@ -25,7 +21,7 @@ enum BeatOption {
 
 #[tokio::main]
 async fn main() {
-    dotenv().ok();
+    dotenv::from_filename(".env").ok();
     clear();
     let json: Value = fetch_data().await.unwrap();
 
@@ -75,7 +71,7 @@ fn download(item: &Value) {
             "flac",
             item.get("url").unwrap().as_str().unwrap(),
         ])
-        .current_dir(dotenv!("DOWNLOAD_PATH"))
+        .current_dir(env::var("DOWNLOAD_PATH").expect("DOWNLOAD_PATH exisitert nicht!"))
         .status()
         .expect("failed to execute yt-dlp");
 
@@ -108,7 +104,7 @@ fn beat_options() -> usize {
 }
 
 async fn fetch_data() -> Result<Value, Box<dyn std::error::Error>> {
-    let response = reqwest::get(dotenv!("URL"))
+    let response = reqwest::get(env::var("URL").expect("URL exisitert nicht!"))
         .await
         .unwrap_or_else(|e| {
             eprintln!("{}", e);
